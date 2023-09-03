@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,11 +18,14 @@ class _HomePageState extends State<HomePage> {
 
   //on below line we have set the camera position
   static const CameraPosition _initialLocation = CameraPosition(
-    target: LatLng(23.913689376605852, 90.39846164980845),
+    target: sourceLocation,
     zoom: 15,
     bearing: 30,
     tilt: 10,
   );
+
+  static const LatLng sourceLocation = LatLng(23.9056, 90.3989);
+  static const LatLng destinationLocation = LatLng(23.8746, 90.3967);
 
   StreamSubscription? _streamSubscription;
   LocationData? locationData;
@@ -30,21 +33,24 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void initState() {
-   // initialize();
+    initialize();
     super.initState();
 
   }
-  //
-  // void initialize(){
-  //   Location.instance.changeSettings(
-  //     distanceFilter: 2,
-  //     accuracy: LocationAccuracy.high,
-  //     interval: 1000
-  //   );
-  // }
+
+  void initialize() {
+    Permission.locationWhenInUse.request();
+    Location.instance.changeSettings(
+      distanceFilter: 10,
+      accuracy: LocationAccuracy.high,
+      interval: 10000
+    );
+  }
 
   void getMyLocation() async {
-    await Location.instance.requestPermission().then((value) => {});
+    await Location.instance.requestPermission().then((value) => {
+
+    });
     Location.instance.hasPermission().then((value) => {});
 
     locationData = await Location.instance.getLocation();
@@ -55,11 +61,23 @@ class _HomePageState extends State<HomePage> {
   }
 
   void listenMyLocation() async {
+    GoogleMapController googleMapController = await _googleMapController.future;
+
     _streamSubscription =
         Location.instance.onLocationChanged.listen((location) {
       print(location);
+
       if (location != locationData) {
         locationData = location;
+        googleMapController.animateCamera(CameraUpdate.newCameraPosition(
+          CameraPosition(target: LatLng(
+            location.latitude!,location.longitude!
+          ),
+            zoom: 15,
+            bearing: 30,
+            tilt: 10,
+          )
+        ));
         if (mounted) {
           setState(() {});
         }
@@ -79,7 +97,12 @@ class _HomePageState extends State<HomePage> {
       ),
       body: SafeArea(
         child: GoogleMap(
-          initialCameraPosition: _initialLocation,
+          initialCameraPosition: const CameraPosition(
+            target: sourceLocation,
+            zoom: 15,
+            bearing: 30,
+            tilt: 10,
+          ),
           zoomControlsEnabled: true,
           zoomGesturesEnabled: true,
           compassEnabled: true,
@@ -91,12 +114,24 @@ class _HomePageState extends State<HomePage> {
           },
           markers:  <Marker>{
             Marker(
-              markerId: const MarkerId("custom-marker"),
+              markerId: const MarkerId("custom-marker-1"),
+              position: sourceLocation,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              draggable: true,
+            ),
+            Marker(
+              markerId: const MarkerId("custom-marker-2"),
               position: LatLng(locationData?.latitude ?? 0,locationData?.longitude ?? 0),
               icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
               infoWindow:  InfoWindow(title: "My Current Location",
                 snippet: "${locationData?.latitude ?? 0},${locationData?.longitude ?? 0}",
               ),
+              draggable: true,
+            ),
+            Marker(
+              markerId: const MarkerId("custom-marker-3"),
+              position: destinationLocation,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
               draggable: true,
             )
           },
@@ -105,8 +140,9 @@ class _HomePageState extends State<HomePage> {
                 visible: true,
                 polylineId: const PolylineId("custom-polyline"),
                 points:[
-                  const LatLng(23.913689376605852, 90.39846164980845),
+                  sourceLocation,
                   LatLng(locationData?.latitude ?? 0,locationData?.longitude ?? 0),
+                  destinationLocation
                 ],
 
               )
